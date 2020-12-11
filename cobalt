@@ -1,0 +1,353 @@
+#!/usr/bin/python3
+
+# Cobalt Build System - 0.0.1
+# Copyright (C) 2020 Ayush Bardhan Tripathy.
+# This project is licensed under MIT License (See LICENSE.md).
+
+import os, sys, subprocess, shutil;
+import json, itertools, argparse;
+
+#################################
+# Utilities
+#################################
+
+def_proj_file_name = "Cobalt.json";
+
+def flatten(l):
+	rt = [];
+	for i in l:
+		if isinstance(i, list): rt.extend(flatten(i));
+		else: rt.append(i);
+	return rt;
+
+def make_dir(folder):
+	if not os.path.exists(folder):
+		os.mkdir(folder);
+
+def get_file_in_dir(path):
+	ret = [];
+	for files in os.listdir(path):
+		name = os.path.join(path, files);
+		if os.path.isfile(name):
+			ret += [name];
+	return ret;
+
+def get_file_in_dir_recursively(path, ext):
+	ret = [];
+	for files in os.listdir(path):
+		name = os.path.join(path, files);
+		if os.path.isfile(name):
+			if name.endswith(ext): ret += [name];
+		else:
+			ret += get_file_in_dir_recursively(name, ext);
+	return ret;
+
+#################################
+# Compiler command
+#################################
+
+def compile_object(source, dest, include_dir):
+	command_list = ["gcc", "-Wall", "-g", "-c", source, "-o", dest, include_dir];
+	command = flatten(command_list);
+
+	subprocess.call(command);
+
+def link_command(name, objects, lib_dir, libs):
+	command_list = ["gcc", "-o", name, objects, lib_dir, libs, "-s"];
+	command = flatten(command_list);
+	
+	subprocess.call(command);
+
+def make_dir_list(proj_path, dir_list, prefix):
+	to_ret = [];
+	for i in dir_list:
+		to_ret += [prefix + os.path.join(proj_path, i)];
+	return to_ret;
+
+def make_include_dir(proj_path, include_dir_list):
+	return make_dir_list(proj_path, include_dir_list, "-I");
+
+def make_lib_dir(proj_path, lib_dir_list):
+	return make_dir_list(proj_path, lib_dir_list, "-L");
+
+def make_libs(libs_list):
+	return make_dir_list("", libs_list, "-l");
+
+#################################
+# Project descriptor
+#################################
+
+class ProjectDescriptor:
+	def __init__(self):
+		self.id = "";
+		self.type = "";
+		self.src = [];
+		self.libs = [];
+		self.include_dir = [];
+		self.lib_dir = [];
+		self.runtime_data = [];
+		self.depends = [];
+
+	def __add__(self, other):
+		ret = ProjectDescriptor();
+
+		for attr in dir(self):
+			attr1 = getattr(self, attr);
+			attr2 = getattr(other, attr);
+
+			if attr.startswith("__"): continue;
+			if callable(attr1): continue;
+
+			val1 = attr1 if type(attr1) is list else [];
+			val2 = attr2 if type(attr2) is list and len(attr1) != 0 else [];
+
+			setattr(ret, attr, val1 + val2);
+
+		return ret;
+
+#################################
+# Building project
+#################################
+
+class ProjectBuilder:
+	def __init__(self, builddir, proj_path):
+		self.proj_path = proj_path;
+		self.build_directory = os.path.join(self.proj_path, builddir);        # builddir/
+		self.bin_directory = os.path.join(self.build_directory, "bin");       # builddir/bin
+		self.object_directory = os.path.join(self.build_directory, "object"); # builddir/object
+		self.watch_directory = os.path.join(self.build_directory, "watch");   # builddir/watch
+	
+		# Check and make the directories
+		make_dir(self.build_directory);
+		make_dir(self.bin_directory);
+		make_dir(self.object_directory);
+		make_dir(self.watch_directory);
+
+		self.project = None;    # A map to store the project info
+		self.timestamps = {};   # Timestamps of the source files
+		self.compile_unit = []; # Details of compilation
+
+		# The name of file where timestamps are stored
+		self.watch_file_name = os.path.join(self.watch_directory, "watch.json");
+	
+		self.target_name = "";
+	
+	def load_project(self):
+		# Open the project file and get all the info
+		project = {};
+		with open(os.path.join(self.proj_path, def_proj_file_name)) as project_file:
+			project = json.load(project_file);
+
+		get_prop = lambda x: project[x] if x in project else [];
+
+		self.project = ProjectDescriptor();
+
+		if not "id" in project or not "type" in project:
+			return False;
+
+		self.project.id = project["id"];
+		self.project.type = project["type"];
+
+		self.project.src = get_prop("src");
+		self.project.libs = get_prop("libs");
+		self.project.include_dir = get_prop("include_dir");
+		self.project.lib_dir = get_prop("lib_dir");
+		self.project.runtime_data = get_prop("runtime_data");
+		self.project.depends = get_prop("depends");
+
+		self.target_name = os.path.join(self.bin_directory, self.project.id);
+		self.project.runtime_data += [self.target_name];
+	
+	def load_timestamps(self):
+		# Check if the timestamp file (watch.json) exists?
+		if os.path.isfile(self.watch_file_name):
+			# Then collect all the timestamps
+			with open(self.watch_file_name, "r") as watch_file:
+				self.timestamps = json.load(watch_file);
+
+	def save_timestamps(self):
+		# Save the timestamps
+		with open(self.watch_file_name, "w") as watch_file:
+			json.dump(self.timestamps, watch_file);
+
+	def check_sources(self):
+		# Loop through all the files
+		for source_file in self.project.src:
+			file_name = os.path.join(self.proj_path, source_file);
+			object_name = os.path.join(self.object_directory, source_file.replace("/", "--") + ".o");
+
+			if not os.path.isfile(file_name):
+				print("File " + source_file + " not found.\nAborting!");
+				return False;
+
+			if file_name in self.timestamps:
+				if self.timestamps[file_name] == os.stat(file_name).st_mtime and os.path.isfile(object_name): 
+					continue;
+
+			# Update the time stamps
+			self.timestamps[file_name] = os.stat(file_name).st_mtime;
+			# Add into current compilation unit
+			self.compile_unit += [{ "name": source_file, "source": file_name, "dest": object_name }];
+
+	def need_to_build(self):
+		# There are no files to build?
+		# The output file exist?
+		return len(self.compile_unit) == 0 and os.path.isfile(self.target_name); 
+	
+	def compile_objects(self):
+		include_dir = make_include_dir(self.proj_path, self.project.include_dir);
+
+		# Compile the files to form objects
+		for i in range(len(self.compile_unit)):
+			name = self.compile_unit[i]["name"];
+			file_name = self.compile_unit[i]["source"];
+			object_name = self.compile_unit[i]["dest"];
+
+			print("[%s/%s] Compiling file: %s" % (str(i + 1), len(self.compile_unit), name));
+			compile_object(file_name, object_name, include_dir);
+
+	def link(self):
+		# Link the object files to form an executable
+		objs = get_file_in_dir(self.object_directory); # Get all the files in builddir/object directory
+		print("Linking application: %s" % (self.project.id));
+
+		lib_dir = make_lib_dir(self.proj_path, self.project.lib_dir);
+		libs = make_libs(self.project.libs);
+
+		link_command(self.target_name, objs, lib_dir, libs); # The link command
+
+	def load_depends(self):
+		for depend in self.project.depends:
+			depproj = ProjectBuilder("builddir", os.path.join(self.proj_path, depend));
+			depinfo = depproj.build();
+			
+			if depinfo.type == "application":
+				self.project.runtime_data += depinfo.runtime_data;
+			else: 
+				self.project += depinfo;
+
+	def runtime_data(self):
+		for i in self.project.runtime_data:
+			dest = os.path.join(self.bin_directory, os.path.basename(i));
+
+			if dest != self.target_name:
+				shutil.copyfile(i, dest);
+
+	def build(self):
+		if not self.load_project():
+			print("No a valid project!\nAborting.");
+			return 0;
+
+		buildable_proj_types = ["application", "staticlib", "shaderlib"];
+		if self.project.type in buildable_proj_types: 
+			self.load_timestamps();
+	
+			self.load_depends();
+
+			print("[Project: %s => %s]" % (self.project.id, self.project.type));
+			
+			if self.check_sources() == False:
+				return;
+	
+			to_build = True;
+			if not self.need_to_build() == False:
+				print("Project up-to-date.\nNothing to do!");
+				to_build = False;
+
+			if to_build: 
+				self.compile_objects();
+				self.save_timestamps();
+
+			if self.project.type == "application":
+				if to_build: self.link();
+				self.runtime_data();
+
+				projdesc = ProjectDescriptor();
+				projdesc.runtime_data = self.target_name;
+			
+		return self.project;
+
+#################################
+# Project creation
+#################################
+
+class ProjectCreator:
+	def __init__(self, name, type):
+		self.project = {};
+		self.project["id"] = name;
+		self.project["type"] = type;
+
+	def is_valid_type(self):
+		types = ["application", "staticlib", "sharedlib", "module"];
+		if self.project["type"] in types:
+			return True;
+		else:
+			return False;
+
+	def create_project(self):
+		if not self.is_valid_type():
+			print("Unrecognized project type \"%s\", changing to default (application)." % (self.project["type"]));
+			self.project["type"] = "application";
+
+		if os.path.isfile(def_proj_file_name):
+			print("A project already exists in this directory.\nAbort.");
+			return;
+
+		if os.path.exists("src"):
+			self.project["src"] = get_file_in_dir_recursively("src", ".c");
+
+		with open(def_proj_file_name, "w") as project_file:
+			json.dump(self.project, project_file, indent = 4);
+
+		print("New project created in current working directory: %s" % (self.project["id"]));
+
+#################################
+# Main
+#################################
+
+usage = """cobalt [-h] command
+
+Simple, minimalistic build system for C projects.
+
+list of commands:
+  new         Create a new project
+  build       Build the project in current directory
+""";
+
+def main(argv):
+	ap = argparse.ArgumentParser(
+		usage = usage
+	);
+	ap.add_argument("command", help = "Subcommand to run");
+	
+	args = ap.parse_args(sys.argv[1:2]);
+
+	if args.command == "new":
+		nap = argparse.ArgumentParser();
+		nap.add_argument("name", nargs = "?", default = os.path.basename(os.getcwd()));
+		nap.add_argument("-t", "--type", type = str, default = "application");
+
+		nargs = nap.parse_args(sys.argv[2:]);
+
+		project = ProjectCreator(nargs.name, nargs.type);
+		project.create_project();
+	elif args.command == "build":
+		nap = argparse.ArgumentParser();
+		nap.add_argument("-d", "--dir", type = str, default = "builddir");
+
+		nargs = nap.parse_args(sys.argv[2:]);
+
+		proj_path = os.path.dirname(os.path.abspath(def_proj_file_name));
+
+		if not os.path.isfile(os.path.join(proj_path, def_proj_file_name)):
+			print("The current directory has no Cobalt project in it!\nAborting.");
+			return 0;
+
+		builder = ProjectBuilder(nargs.dir, proj_path);
+		builder.build();
+	elif args.command == "run":
+		# To do
+		pass;
+
+if __name__ == "__main__":
+	main(sys.argv);
