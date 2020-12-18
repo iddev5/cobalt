@@ -1,8 +1,4 @@
-help:
-	@echo Cobalt Build System.\n
-	@echo list of commands:
-	@echo    install
-	@echo    uninstall
+.PHONY: install uninstall
 
 install:
 	cp -f cobalt /usr/bin/cobalt
@@ -11,4 +7,9 @@ install:
 uninstall:
 	rm -f /usr/bin/cobalt
 
-.PHONY: install
+help:
+	@echo Cobalt Build System.
+	@echo
+	@echo list of commands:
+	@echo    install
+	@echo    uninstall

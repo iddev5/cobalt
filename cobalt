@@ -106,6 +106,29 @@ class ProjectDescriptor:
 		return ret;
 
 #################################
+# Application runner
+#################################
+
+class ApplicationRunner:
+	def __init__(self, builddir, proj_path):
+		self.proj_path = proj_path;
+		self.build_directory = os.path.join(self.proj_path, builddir);
+		self.bin_directory = os.path.join(self.build_directory, "bin");
+
+	def load_project(self):
+		with open(os.path.join(self.proj_path, def_proj_file_name)) as project_file:
+			return json.load(project_file);
+
+	def run(self):
+		project = self.load_project();
+
+		if project["type"] == "application":
+			print("Lauching application: %s" % (project["id"]));
+			subprocess.run([os.path.join(self.bin_directory, project["id"])]);
+		else:
+			print("Nothing to run!");
+
+#################################
 # Building project
 #################################
 
@@ -234,7 +257,7 @@ class ProjectBuilder:
 				shutil.copyfile(i, dest);
 
 	def build(self):
-		if not self.load_project():
+		if self.load_project() == False:
 			print("No a valid project!\nAborting.");
 			return 0;
 
@@ -346,7 +369,20 @@ def main(argv):
 		builder = ProjectBuilder(nargs.dir, proj_path);
 		builder.build();
 	elif args.command == "run":
-		# To do
+		nap = argparse.ArgumentParser();
+		nap.add_argument("-d", "--dir", type = str, default = "builddir");
+
+		nargs = nap.parse_args(sys.argv[2:]);
+
+		proj_path = os.path.dirname(os.path.abspath(def_proj_file_name));
+
+		if not os.path.isfile(os.path.join(proj_path, def_proj_file_name)):
+			print("The current directory has no Cobalt project in it!\nAborting.");
+			return 0;
+		
+		application = ApplicationRunner(nargs.dir, proj_path);
+		application.run();
+
 		pass;
 
 if __name__ == "__main__":
