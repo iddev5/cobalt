@@ -5,13 +5,14 @@
 # This project is licensed under MIT License (See LICENSE.md).
 
 import os, sys, subprocess, shutil;
-import json, itertools, argparse;
+import json, argparse;
 
 #################################
 # Utilities
 #################################
 
 def_proj_file_name = "Cobalt.json";
+ninja_required_version = "1.5.1";
 
 def make_dir(folder):
 	if not os.path.exists(folder):
@@ -31,9 +32,23 @@ def get_files(path, ext, recurse):
 # Compiler command
 #################################
 
-def ninja_write_file(project, file_name):
+def make_dir_list(proj_path, dir_list, prefix):
+	to_ret = [];
+	to_ret += [prefix + os.path.join(proj_path, i) for i in dir_list];
+	return to_ret;
+
+def make_include_dir(proj_path, include_dir_list):
+	return make_dir_list(proj_path, include_dir_list, "-I");
+
+def make_lib_dir(proj_path, lib_dir_list):
+	return make_dir_list(proj_path, lib_dir_list, "-L");
+
+def make_libs(libs_list):
+	return make_dir_list("", libs_list, "-l");
+
+def Ninja_write_file(project, file_name):
 	with open(file_name, "w") as file:
-		file.write("ninja_required_version = 1.5.1\n\n");
+		file.write("ninja_required_version = %s\n\n" % (ninja_required_version));
 		
 		file.writelines([
 			"rule c_Compile\n",
@@ -49,8 +64,6 @@ def ninja_write_file(project, file_name):
 			" description = Linking project$: $LINKNAME\n\n"
 		]);
 
-		safeget = lambda x: project[x] if x in project else [];
-
 		for i in range(len(project["src"])):
 			source_name = project["source_list"][i];
 			object_name = project["object_list"][i];
@@ -58,38 +71,20 @@ def ninja_write_file(project, file_name):
 			file.writelines([
 				"build %s: c_Compile %s\n" % (object_name, source_name),
 				" DEPFILE = %s\n" % (object_name + ".d"),
-				" INCLUDE_DIR = %s\n" % " ".join((make_include_dir(project["path"], safeget("include_dir")))),
+				" INCLUDE_DIR = %s\n" % project["proc_include_dir"],
 				" FILENAME = %s\n" % (project["src"][i])
 			]);
 		
 		file.writelines([
 			"build %s: c_Link " % (project["target_name"]),
 			" ".join(project["object_list"]), "\n",
-			" LIB_DIR = %s\n" %	" ".join((make_lib_dir(project["path"], safeget("lib_dir")))),
-			" LIBS = %s\n" % " ".join((make_libs(safeget("libs")))),
+			" LIB_DIR = %s\n" %	project["proc_lib_dir"],
+			" LIBS = %s\n" % project["proc_libs"],
 			" LINKNAME = %s\n" % project["id"]
 		]);
 
 		file.write("default %s" % (project["target_name"]));
 		file.write("\n\n");
-
-#################################
-# Compiler command
-#################################
-
-def make_dir_list(proj_path, dir_list, prefix):
-	to_ret = [];
-	to_ret += [prefix + os.path.join(proj_path, i) for i in dir_list];
-	return to_ret;
-
-def make_include_dir(proj_path, include_dir_list):
-	return make_dir_list(proj_path, include_dir_list, "-I");
-
-def make_lib_dir(proj_path, lib_dir_list):
-	return make_dir_list(proj_path, lib_dir_list, "-L");
-
-def make_libs(libs_list):
-	return make_dir_list("", libs_list, "-l");
 
 #################################
 # Project
@@ -141,7 +136,6 @@ def Cobalt_run(project):
 #################################
 
 def process_project(project):
-	project["compile_unit"] = [];
 	project["source_list"] = [];
 	project["object_list"] = [];
 
@@ -153,15 +147,29 @@ def process_project(project):
 			print("File " + source_file + " not found.\nAborting!");
 			return False;
 
-		#project["compile_unit"] += [{ "name": source_file, "file_name": file_name, "object_name": object_name }];
 		project["source_list"] += [file_name];
 		project["object_list"] += [object_name];
+
+	if "include_dir" in project:
+		project["proc_include_dir"] = " ".join(make_include_dir(project["path"], project["include_dir"]));
+	else: 
+		project["proc_include_dir"] = "";
+
+	if "lib_dir" in project:
+		project["proc_lib_dir"] = " ".join(make_include_dir(project["path"], project["lib_dir"]));
+	else:
+		project["proc_lib_dir"] = "";
+
+	if "libs" in project:
+		project["proc_libs"] = " ".join(make_include_dir(project["path"], project["libs"]));
+	else:
+		project["proc_libs"] = "";
 
 def copy_runtime_data(project):
 	if "runtime_data" not in project:
 		return;
 
-	for i in project["runtime_data"]:
+	for i in filter(list, project["runtime_data"]):
 		dest = os.path.join(project["bin_dir"], os.path.basename(i));
 
 		if dest != project["target_name"]:
@@ -174,31 +182,35 @@ def load_depends(project):
 	for depend in project["depends"]:
 		depproj = load_project(os.path.join(project["path"], depend));
 		active_project(depproj, "builddir");
-		build_project(depproj);
+		Cobalt_build(depproj);
 
 		def define_x(x):
 			if x not in project: project[x] = [];
 			if x not in depproj: depproj[x] = [];
 
+		define_x("include_dir");
+		define_x("lib_dir");
+		define_x("libs");
 		define_x("runtime_data");
 		define_x("target_name");
 			
-		def add_proj(x): project[x] += depproj[x];
-
 		if depproj["type"] == "application":
 			project["runtime_data"] += [depproj["target_name"]];
+		elif depproj["type"] == "module":
+			project["include_dir"] += [depproj["include_dir"]];
+			project["lib_dir"] += [depproj["lib_dir"]];
+			project["libs"] += [depproj["libs"]];
 
-		add_proj("runtime_data");
+		project["runtime_data"] += [depproj["runtime_data"]];
 
 def Cobalt_build(project):
-	process_project(project);
-
 	load_depends(project);
 
-	gen_file = os.path.join(project["build_dir"], "build.ninja");
-
-	ninja_write_file(project, os.path.join(gen_file));
-	subprocess.call(["ninja", "-C", project["build_dir"]]);
+	if project["type"] in ["application", "staticlib", "sharedlib"]:
+		process_project(project);
+		Ninja_write_file(project, os.path.join(project["build_dir"], "build.ninja"));
+		subprocess.call(["ninja", "-C", project["build_dir"]]);
+	
 	copy_runtime_data(project);
 
 #################################
