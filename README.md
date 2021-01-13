@@ -1,5 +1,6 @@
 # Cobalt Build System
-Simple, minimalistic build system for C projects which uses Modules for custom dependencies.
+Simple, minimalistic build system/build generator for C projects which uses Modules for custom dependencies.  
+It outputs Ninja build files which compiles at lightning fast speed utilizing multiple cores.
 
 ## How to use
 1. Create a new project using:
