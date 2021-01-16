@@ -241,6 +241,16 @@ def Cobalt_create(name, type):
 		project["src"]  = get_files("src", ".c", True);
 		project["src"] += get_files("", ".c", False);
 
+	if os.path.exists("include"):
+		project["include_dir"] = "include";
+
+	if os.path.exists("lib"):
+		project["lib_dir"] = "lib";
+		#project["libs"]    = get_files("lib", ".so", False);
+	
+	if os.path.exists("runtime_data");
+		project["runtime_data"] = get_files("runtime_data", "", True);
+
 	with open(def_proj_file_name, "w") as project_file:
 		json.dump(project, project_file, indent = 4);
 
