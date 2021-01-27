@@ -24,9 +24,9 @@ def get_files(path, ext, recurse):
 	for files in os.listdir(path):
 		name = os.path.join(path, files);
 		if os.path.isfile(name):
-			if name.endswith(ext): ret += [name];
+			if name.endswith(ext): ret.append(name);
 		elif recurse:
-			ret += get_files(name, ext, True);
+			ret.extend(get_files(name, ext, True));
 	return ret;
 
 #################################
@@ -35,7 +35,7 @@ def get_files(path, ext, recurse):
 
 def make_dir_list(proj_path, dir_list, prefix):
 	to_ret = [];
-	to_ret += [prefix + os.path.join(proj_path, i) for i in dir_list];
+	to_ret.extend([prefix + os.path.join(proj_path, i) for i in dir_list]);
 	return to_ret;
 
 def make_include_dir(proj_path, include_dir_list):
@@ -49,7 +49,7 @@ def make_libs(libs_list):
 
 def Ninja_write_file(project, file_name):
 	with open(file_name, "w") as file:
-		file.write("ninja_required_version = %s\n\n" % (ninja_required_version));
+		file.write("ninja_required_version = {}\n\n".format(ninja_required_version));
 		
 		file.writelines([
 			"rule c_Compile\n",
@@ -70,21 +70,21 @@ def Ninja_write_file(project, file_name):
 			object_name = project["object_list"][i];
 
 			file.writelines([
-				"build %s: c_Compile %s\n" % (object_name, source_name),
-				" DEPFILE = %s\n" % (object_name + ".d"),
-				" INCLUDE_DIR = %s\n" % project["proc_include_dir"],
-				" FILENAME = %s\n" % (project["src"][i])
+				"build {}: c_Compile {}\n".format(object_name, source_name),
+				" DEPFILE = {}\n".format(object_name + ".d"),
+				" INCLUDE_DIR = {}\n".format(project["proc_include_dir"]),
+				" FILENAME = {}\n".format(project["src"][i])
 			]);
 		
 		file.writelines([
-			"build %s: c_Link " % (project["target_name"]),
+			"build {}: c_Link ".format(project["target_name"]),
 			" ".join(project["object_list"]), "\n",
-			" LIB_DIR = %s\n" %	project["proc_lib_dir"],
-			" LIBS = %s\n" % project["proc_libs"],
-			" LINKNAME = %s\n" % project["id"]
+			" LIB_DIR = {}\n".format(project["proc_lib_dir"]),
+			" LIBS = {}\n".format(project["proc_libs"]),
+			" LINKNAME = {}\n".format(project["id"])
 		]);
 
-		file.write("default %s" % (project["target_name"]));
+		file.write("default {}".format(project["target_name"]));
 		file.write("\n\n");
 
 #################################
@@ -127,7 +127,7 @@ def Cobalt_run(project):
 			print("Project is not compiled.");
 			return False;
 
-		print("Launching application: %s" % (project["id"]));
+		print("Launching application: {}".format(project["id"]));
 		subprocess.run([os.path.join(project["bin_dir"], project["id"])]);
 	else:
 		print("Nothing to run!");
@@ -145,11 +145,11 @@ def process_project(project):
 		object_name = os.path.join(project["object_dir"], source_file.replace("/", "--") + ".o");
 
 		if not os.path.isfile(file_name):
-			print("File " + source_file + " not found.\nAborting!");
+			print("File {} not found.\nAborting!".format(source_file));
 			return False;
 
-		project["source_list"] += [file_name];
-		project["object_list"] += [object_name];
+		project["source_list"].append(file_name);
+		project["object_list"].append(object_name);
 
 	if "include_dir" in project:
 		project["proc_include_dir"] = " ".join(make_include_dir(project["path"], project["include_dir"]));
@@ -196,13 +196,13 @@ def load_depends(project):
 		define_x("target_name");
 			
 		if depproj["type"] == "application":
-			project["runtime_data"] += [depproj["target_name"]];
+			project["runtime_data"].extend(depproj["target_name"]);
 		elif depproj["type"] == "module":
-			project["include_dir"] += [depproj["include_dir"]];
-			project["lib_dir"] += [depproj["lib_dir"]];
-			project["libs"] += [depproj["libs"]];
+			project["include_dir"].extend(depproj["include_dir"]);
+			project["lib_dir"].extend(depproj["lib_dir"]);
+			project["libs"].extend(depproj["libs"]);
 
-		project["runtime_data"] += [depproj["runtime_data"]];
+		project["runtime_data"].extend(depproj["runtime_data"]);
 
 def Cobalt_build(project):
 	load_depends(project);
@@ -235,7 +235,7 @@ def Cobalt_create(name, type):
 		return;
 
 	if not is_valid_project_type(type):
-		print("Unrecognized project type \"%s\", changing to default (application)." % (type));
+		print("Unrecognized project type \"{}\", changing to default (application).".format(type));
 		project["type"] = "application";
 
 	if os.path.exists("src"):
@@ -255,7 +255,7 @@ def Cobalt_create(name, type):
 	with open(def_proj_file_name, "w") as project_file:
 		json.dump(project, project_file, indent = 4);
 
-	print("New project created in current working directory: %s" % (name));
+	print("New project created in current working directory: {}".format(name));
 
 #################################
 # Main
