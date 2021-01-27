@@ -11,6 +11,7 @@ import json, argparse;
 # Utilities
 #################################
 
+def_build_dir = "builddir";
 def_proj_file_name = "Cobalt.json";
 ninja_required_version = "1.5.1";
 
@@ -104,8 +105,8 @@ def load_project(path):
 	project["path"] = path;
 	return project;
 
-def active_project(project, builddir):
-	project["build_dir"] = os.path.join(project["path"], builddir);
+def active_project(project):
+	project["build_dir"] = os.path.join(project["path"], def_build_dir);
 	project["bin_dir"] = os.path.join(project["build_dir"], "bin");
 	project["object_dir"] = os.path.join(project["build_dir"], "object");
 
@@ -246,9 +247,9 @@ def Cobalt_create(name, type):
 
 	if os.path.exists("lib"):
 		project["lib_dir"] = "lib";
-		#project["libs"]    = get_files("lib", ".so", False);
+		# project["libs"]    = get_files("lib", ".so", False);
 	
-	if os.path.exists("runtime_data");
+	if os.path.exists("runtime_data"):
 		project["runtime_data"] = get_files("runtime_data", "", True);
 
 	with open(def_proj_file_name, "w") as project_file:
@@ -286,10 +287,6 @@ def main(argv):
 		Cobalt_create(nargs.name, nargs.type);
 
 	elif args.command == "build":
-		nap = argparse.ArgumentParser();
-		nap.add_argument("-d", "--dir", type = str, default = "builddir");
-		nargs = nap.parse_args(sys.argv[2:]);
-
 		proj_path = os.path.dirname(os.path.abspath(def_proj_file_name));
 
 		if not os.path.isfile(os.path.join(proj_path, def_proj_file_name)):
@@ -297,15 +294,11 @@ def main(argv):
 			return 0;
 
 		project = load_project(proj_path);
-		active_project(project, nargs.dir);
+		active_project(project);
 
 		Cobalt_build(project);
 	
 	elif args.command == "run":
-		nap = argparse.ArgumentParser();
-		nap.add_argument("-d", "--dir", type = str, default = "builddir");
-		nargs = nap.parse_args(sys.argv[2:]);
-
 		proj_path = os.path.dirname(os.path.abspath(def_proj_file_name));
 
 		if not os.path.isfile(os.path.join(proj_path, def_proj_file_name)):
@@ -313,7 +306,7 @@ def main(argv):
 			return 0;
 		
 		project = load_project(proj_path);
-		active_project(project, nargs.dir);
+		active_project(project);
 		if not Cobalt_run(project):
 			Cobalt_build(project);
 			Cobalt_run(project);
