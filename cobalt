@@ -13,6 +13,7 @@ import json, argparse;
 
 def_build_dir = "builddir";
 def_proj_file_name = "Cobalt.json";
+cobalt_version = "0.0.2";
 ninja_required_version = "1.5.1";
 
 #################################
@@ -39,7 +40,7 @@ def make_libs(libs_list):
 def Ninja_write_file(project, file_name):
 	with open(file_name, "w") as file:
 		file.writelines([
-			"# Cobalt Build System 0.1\n",
+			"# Cobalt Build System {}\n".format(cobalt_version),
 			"# This file is generated automatically, do not edit!\n\n"
 		]);
 
@@ -92,7 +93,8 @@ properties = {
 	"include_dir": "",
 	"lib_dir": "",
 	"libs": "",
-	"runtime_data": ""
+	"runtime_data": "",
+	"depends": ""
 };
 
 def check_for_prop(project, prop, type):
@@ -171,19 +173,13 @@ def process_project(project):
 		project["object_list"].append(object_name);
 
 def copy_runtime_data(project):
-	if "runtime_data" not in project:
-		return;
-
-	for i in filter(list, project["runtime_data"]):
+	for i in project["runtime_data"]:
 		dest = os.path.join(project["bin_dir"], os.path.basename(i));
 
 		if dest != project["target_name"]:
 			shutil.copyfile(i, dest);
 
 def load_depends(project):
-	if "depends" not in project:
-		return;
-
 	for depend in project["depends"]:
 		depproj = load_project(os.path.join(project["path"], depend));
 		active_project(depproj);
@@ -253,10 +249,10 @@ def Cobalt_create(name, type):
 		project["src"] += get_files(os.getcwd(), ".c", False);
 
 	if os.path.exists("include"):
-		project["include_dir"] = "include";
+		project["include_dir"] = ["include"];
 
 	if os.path.exists("lib"):
-		project["lib_dir"] = "lib";
+		project["lib_dir"] = ["lib"];
 		# project["libs"]    = get_files("lib", ".so", False);
 	
 	if os.path.exists("runtime_data"):
