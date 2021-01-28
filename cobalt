@@ -49,6 +49,11 @@ def make_libs(libs_list):
 
 def Ninja_write_file(project, file_name):
 	with open(file_name, "w") as file:
+		file.writelines([
+			"# Cobalt Build System 0.1\n",
+			"# This file is generated automatically, do not edit!\n\n"
+		]);
+
 		file.write("ninja_required_version = {}\n\n".format(ninja_required_version));
 		
 		file.writelines([
@@ -73,18 +78,17 @@ def Ninja_write_file(project, file_name):
 				"build {}: c_Compile {}\n".format(object_name, source_name),
 				" DEPFILE = {}\n".format(object_name + ".d"),
 				" INCLUDE_DIR = {}\n".format(project["proc_include_dir"]),
-				" FILENAME = {}\n".format(project["src"][i])
+				" FILENAME = {}\n\n".format(project["src"][i])
 			]);
 		
 		file.writelines([
-			"build {}: c_Link ".format(project["target_name"]),
+			"build {}: c_Link ".format(os.path.relpath(project["target_name"], project["build_dir"])),
 			" ".join(project["object_list"]), "\n",
 			" LIB_DIR = {}\n".format(project["proc_lib_dir"]),
 			" LIBS = {}\n".format(project["proc_libs"]),
-			" LINKNAME = {}\n".format(project["id"])
+			" LINKNAME = {}\n\n".format(project["id"])
 		]);
 
-		file.write("default {}".format(project["target_name"]));
 		file.write("\n\n");
 
 #################################
@@ -142,13 +146,13 @@ def process_project(project):
 
 	for source_file in project["src"]:
 		file_name = os.path.join(project["path"], source_file);
-		object_name = os.path.join(project["object_dir"], source_file.replace("/", "--") + ".o");
+		object_name = os.path.join("object", source_file.replace("/", "--") + ".o");
 
 		if not os.path.isfile(file_name):
 			print("File {} not found.\nAborting!".format(source_file));
 			return False;
 
-		project["source_list"].append(file_name);
+		project["source_list"].append(os.path.relpath(file_name, project["build_dir"]));
 		project["object_list"].append(object_name);
 
 	if "include_dir" in project:
@@ -182,7 +186,7 @@ def load_depends(project):
 
 	for depend in project["depends"]:
 		depproj = load_project(os.path.join(project["path"], depend));
-		active_project(depproj, "builddir");
+		active_project(depproj);
 		Cobalt_build(depproj);
 
 		def define_x(x):
