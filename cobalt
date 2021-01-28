@@ -13,7 +13,7 @@ import json, argparse;
 
 def_build_dir = "builddir";
 def_proj_file_name = "Cobalt.json";
-cobalt_version = "0.0.2";
+cobalt_version = "0.0.3";
 ninja_required_version = "1.5.1";
 
 #################################
@@ -120,16 +120,16 @@ def load_project(path):
 
 	return project;
 
+def make_dir(path):
+	if not os.path.exists(path): 
+		os.mkdir(path);
+
 def active_project(project):
 	project["build_dir"] = os.path.join(project["path"], def_build_dir);
 	project["bin_dir"] = os.path.join(project["build_dir"], "bin");
 	project["object_dir"] = os.path.join(project["build_dir"], "object");
 
-	project["target_name"] = os.path.join(project["bin_dir"], project["id"])
-
-	def make_dir(path):
-		if not os.path.exists(path): 
-			os.mkdir(path);
+	project["target_name"] = os.path.join(project["bin_dir"], project["id"]);
 
 	make_dir(project["build_dir"]);
 	make_dir(project["bin_dir"]);
@@ -211,6 +211,15 @@ def Cobalt_build(project):
 	copy_runtime_data(project);
 
 #################################
+# Deleting build files
+#################################
+
+def Cobalt_clear(path):
+	build_dir = os.path.join(path, def_build_dir);
+	if not os.path.exists(build_dir): return;
+	shutil.rmtree(build_dir);
+
+#################################
 # Project creation
 #################################
 
@@ -273,7 +282,9 @@ Simple, minimalistic build system for C projects.
 
 list of commands:
   new         Create a new project
+  clear       Clear the build directory
   build       Build the project in current directory
+  rebuild     Clear the directory and build again
 """;
 
 def main(argv):
@@ -292,12 +303,31 @@ def main(argv):
 
 		Cobalt_create(nargs.name, nargs.type);
 
+	elif args.command == "clear":
+		proj_path = os.path.dirname(os.path.abspath(def_proj_file_name));
+
+		Cobalt_clear(proj_path);
+
 	elif args.command == "build":
 		proj_path = os.path.dirname(os.path.abspath(def_proj_file_name));
 
 		if not os.path.isfile(os.path.join(proj_path, def_proj_file_name)):
 			print("The current directory has no Cobalt project in it!\nAborting.");
 			return 0;
+
+		project = load_project(proj_path);
+		active_project(project);
+
+		Cobalt_build(project);
+
+	elif args.command == "rebuild":
+		proj_path = os.path.dirname(os.path.abspath(def_proj_file_name));
+
+		if not os.path.isfile(os.path.join(proj_path, def_proj_file_name)):
+			print("The current directory has no Cobalt project in it!\nAborting.");
+			return 0;
+
+		Cobalt_clear(proj_path);
 
 		project = load_project(proj_path);
 		active_project(project);
