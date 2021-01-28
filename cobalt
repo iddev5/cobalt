@@ -15,37 +15,26 @@ def_build_dir = "builddir";
 def_proj_file_name = "Cobalt.json";
 ninja_required_version = "1.5.1";
 
-def make_dir(folder):
-	if not os.path.exists(folder):
-		os.mkdir(folder);
-
-def get_files(path, ext, recurse):
-	ret = [];
-	for files in os.listdir(path):
-		name = os.path.join(path, files);
-		if os.path.isfile(name):
-			if name.endswith(ext): ret.append(name);
-		elif recurse:
-			ret.extend(get_files(name, ext, True));
-	return ret;
-
 #################################
 # Compiler command
 #################################
 
-def make_dir_list(proj_path, dir_list, prefix):
-	to_ret = [];
-	to_ret.extend([prefix + os.path.join(proj_path, i) for i in dir_list]);
-	return to_ret;
+def make_prefix(dir_list, prefix):
+	if dir_list == None: 
+		return [];
+	else:
+		to_ret = [];
+		to_ret.extend([prefix + i for i in dir_list]);
+		return to_ret;
 
-def make_include_dir(proj_path, include_dir_list):
-	return make_dir_list(proj_path, include_dir_list, "-I");
+def make_include_dir(include_dir_list):
+	return make_prefix(include_dir_list, "-I");
 
-def make_lib_dir(proj_path, lib_dir_list):
-	return make_dir_list(proj_path, lib_dir_list, "-L");
+def make_lib_dir(lib_dir_list):
+	return make_prefix(lib_dir_list, "-L");
 
 def make_libs(libs_list):
-	return make_dir_list("", libs_list, "-l");
+	return make_prefix(libs_list, "-l");
 
 def Ninja_write_file(project, file_name):
 	with open(file_name, "w") as file:
@@ -70,6 +59,10 @@ def Ninja_write_file(project, file_name):
 			" description = Linking project$: $LINKNAME\n\n"
 		]);
 
+		include_dir = " ".join(make_include_dir(project.get("include_dir")));
+		lib_dir = " ".join(make_lib_dir(project.get("lib_dir")));
+		libs = " ".join(make_libs(project.get("libs")));
+
 		for i in range(len(project["src"])):
 			source_name = project["source_list"][i];
 			object_name = project["object_list"][i];
@@ -77,15 +70,15 @@ def Ninja_write_file(project, file_name):
 			file.writelines([
 				"build {}: c_Compile {}\n".format(object_name, source_name),
 				" DEPFILE = {}\n".format(object_name + ".d"),
-				" INCLUDE_DIR = {}\n".format(project["proc_include_dir"]),
+				" INCLUDE_DIR = {}\n".format(include_dir),
 				" FILENAME = {}\n\n".format(project["src"][i])
 			]);
 		
 		file.writelines([
 			"build {}: c_Link ".format(os.path.relpath(project["target_name"], project["build_dir"])),
 			" ".join(project["object_list"]), "\n",
-			" LIB_DIR = {}\n".format(project["proc_lib_dir"]),
-			" LIBS = {}\n".format(project["proc_libs"]),
+			" LIB_DIR = {}\n".format(lib_dir),
+			" LIBS = {}\n".format(libs),
 			" LINKNAME = {}\n\n".format(project["id"])
 		]);
 
@@ -115,6 +108,10 @@ def active_project(project):
 	project["object_dir"] = os.path.join(project["build_dir"], "object");
 
 	project["target_name"] = os.path.join(project["bin_dir"], project["id"])
+
+	def make_dir(path):
+		if not os.path.exists(path): 
+			os.mkdir(path);
 
 	make_dir(project["build_dir"]);
 	make_dir(project["bin_dir"]);
@@ -155,21 +152,6 @@ def process_project(project):
 		project["source_list"].append(os.path.relpath(file_name, project["build_dir"]));
 		project["object_list"].append(object_name);
 
-	if "include_dir" in project:
-		project["proc_include_dir"] = " ".join(make_include_dir(project["path"], project["include_dir"]));
-	else: 
-		project["proc_include_dir"] = "";
-
-	if "lib_dir" in project:
-		project["proc_lib_dir"] = " ".join(make_include_dir(project["path"], project["lib_dir"]));
-	else:
-		project["proc_lib_dir"] = "";
-
-	if "libs" in project:
-		project["proc_libs"] = " ".join(make_include_dir(project["path"], project["libs"]));
-	else:
-		project["proc_libs"] = "";
-
 def copy_runtime_data(project):
 	if "runtime_data" not in project:
 		return;
@@ -189,24 +171,26 @@ def load_depends(project):
 		active_project(depproj);
 		Cobalt_build(depproj);
 
-		def define_x(x):
+		def define_prop(x):
 			if x not in project: project[x] = [];
 			if x not in depproj: depproj[x] = [];
 
-		define_x("include_dir");
-		define_x("lib_dir");
-		define_x("libs");
-		define_x("runtime_data");
-		define_x("target_name");
+		define_prop("include_dir");
+		define_prop("lib_dir");
+		define_prop("libs");
+		define_prop("runtime_data");
+		define_prop("target_name");
 			
+		get_data = lambda prop: os.path.join(depproj["path"], depproj[prop]);
+
 		if depproj["type"] == "application":
-			project["runtime_data"].extend(depproj["target_name"]);
+			project["runtime_data"].extend(get_data("target_name"));
 		elif depproj["type"] == "module":
-			project["include_dir"].extend(depproj["include_dir"]);
-			project["lib_dir"].extend(depproj["lib_dir"]);
+			project["include_dir"].extend(get_data("include_dir"));
+			project["lib_dir"].extend(get_data("lib_dir"));
 			project["libs"].extend(depproj["libs"]);
 
-		project["runtime_data"].extend(depproj["runtime_data"]);
+		project["runtime_data"].extend(get_data("runtime_data"));
 
 def Cobalt_build(project):
 	load_depends(project);
@@ -214,7 +198,11 @@ def Cobalt_build(project):
 	if project["type"] in ["application", "staticlib", "sharedlib"]:
 		process_project(project);
 		Ninja_write_file(project, os.path.join(project["build_dir"], "build.ninja"));
-		subprocess.call(["ninja", "-C", project["build_dir"]]);
+
+		owd = os.getcwd();
+		os.chdir(project["build_dir"]);
+		subprocess.call(["ninja"]);
+		os.chdir(owd);
 	
 	copy_runtime_data(project);
 
@@ -228,6 +216,16 @@ def is_valid_project_type(type):
 		return True;
 	else:
 		return False;
+
+def get_files(path, ext, recurse):
+	ret = [];
+	for files in os.listdir(path):
+		name = os.path.join(path, files);
+		if os.path.isfile(name):
+			if name.endswith(ext): ret.append(name);
+		elif recurse:
+			ret.extend(get_files(name, ext, True));
+	return ret;
 
 def Cobalt_create(name, type):
 	project = {};
@@ -244,7 +242,7 @@ def Cobalt_create(name, type):
 
 	if os.path.exists("src"):
 		project["src"]  = get_files("src", ".c", True);
-		project["src"] += get_files("", ".c", False);
+		project["src"] += get_files(os.getcwd(), ".c", False);
 
 	if os.path.exists("include"):
 		project["include_dir"] = "include";
