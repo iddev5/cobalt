@@ -88,6 +88,18 @@ def Ninja_write_file(project, file_name):
 # Project
 #################################
 
+properties = {
+	"include_dir": "",
+	"lib_dir": "",
+	"libs": "",
+	"runtime_data": ""
+};
+
+def check_for_prop(project, prop, type):
+	if prop not in project:
+		if type == "string": project[prop] = "";
+		else: project[prop] = [];
+
 def load_project(path):
 	project = {};
 	project_file = os.path.join(path, def_proj_file_name);
@@ -100,6 +112,10 @@ def load_project(path):
 		project = json.load(file);
 
 	project["path"] = path;
+
+	for prop in properties:
+		check_for_prop(project, prop, properties.get(prop));
+
 	return project;
 
 def active_project(project):
@@ -129,9 +145,11 @@ def Cobalt_run(project):
 			return False;
 
 		print("Launching application: {}".format(project["id"]));
-		subprocess.run([os.path.join(project["bin_dir"], project["id"])]);
+		subprocess.run([file_name]);
 	else:
 		print("Nothing to run!");
+
+	return True;
 
 #################################
 # Building project
@@ -170,18 +188,8 @@ def load_depends(project):
 		depproj = load_project(os.path.join(project["path"], depend));
 		active_project(depproj);
 		Cobalt_build(depproj);
-
-		def define_prop(x):
-			if x not in project: project[x] = [];
-			if x not in depproj: depproj[x] = [];
-
-		define_prop("include_dir");
-		define_prop("lib_dir");
-		define_prop("libs");
-		define_prop("runtime_data");
-		define_prop("target_name");
-			
-		get_data = lambda prop: os.path.join(depproj["path"], depproj[prop]);
+		
+		get_data = lambda prop: [os.path.relpath(os.path.join(depproj.get("path"), i), project.get("path")) for i in depproj.get(prop)];
 
 		if depproj["type"] == "application":
 			project["runtime_data"].extend(get_data("target_name"));
