@@ -41,7 +41,7 @@ def load_project(path):
 	
 	if not os.path.isfile(project_file):
 		print("The current directory has no Cobalt project in it!\nAborting.");
-		return;
+		return None;
 		
 	with open(project_file) as file:
 		project = json.load(file);
@@ -114,10 +114,10 @@ def Cobalt_create(name, type):
 # Deleting build files
 #################################
 
-def Cobalt_clear(path):
-	build_dir = os.path.join(path, def_build_dir);
-	if not os.path.exists(build_dir): return;
-	shutil.rmtree(build_dir);
+def Cobalt_clear(project):
+	if not os.path.exists(project["build_dir"]): 
+		return;
+	shutil.rmtree(project["build_dir"]);
 
 #################################
 # Generate project
@@ -316,53 +316,30 @@ def main(argv):
 
 		Cobalt_create(nargs.name, nargs.type);
 
-	elif args.command == "clear":
+	else:
 		proj_path = os.path.dirname(os.path.abspath(def_proj_file_name));
-		Cobalt_clear(proj_path);
-
-	elif args.command == "generate":
-		proj_path = os.path.dirname(os.path.abspath(def_proj_file_name));
-
-		if not os.path.isfile(os.path.join(proj_path, def_proj_file_name)):
-			print("The current directory has no Cobalt project in it!\nAborting.");
-			return 0;
-
-		project = load_project(proj_path);
-		Cobalt_generate(project);
-
-	elif args.command == "build":
-		proj_path = os.path.dirname(os.path.abspath(def_proj_file_name));
-
-		if not os.path.isfile(os.path.join(proj_path, def_proj_file_name)):
-			print("The current directory has no Cobalt project in it!\nAborting.");
-			return 0;
-
-		project = load_project(proj_path);
-		Cobalt_build(project);
-
-	elif args.command == "rebuild":
-		proj_path = os.path.dirname(os.path.abspath(def_proj_file_name));
-
-		if not os.path.isfile(os.path.join(proj_path, def_proj_file_name)):
-			print("The current directory has no Cobalt project in it!\nAborting.");
-			return 0;
-
-		Cobalt_clear(proj_path);
-
-		project = load_project(proj_path);
-		Cobalt_build(project);
-	
-	elif args.command == "run":
-		proj_path = os.path.dirname(os.path.abspath(def_proj_file_name));
-
-		if not os.path.isfile(os.path.join(proj_path, def_proj_file_name)):
-			print("The current directory has no Cobalt project in it!\nAborting.");
-			return 0;
 		
 		project = load_project(proj_path);
-		if not Cobalt_run(project):
+		if project == None:
+			return 0;
+
+		if args.command == "clear":
+			Cobalt_clear(project);
+
+		elif args.command == "generate":
+			Cobalt_generate(project);
+
+		elif args.command == "build":
 			Cobalt_build(project);
-			Cobalt_run(project);
+
+		elif args.command == "rebuild":
+			Cobalt_clear(project);
+			Cobalt_build(project);
+		
+		elif args.command == "run":
+			if not Cobalt_run(project):
+				Cobalt_build(project);
+				Cobalt_run(project);
 
 if __name__ == "__main__":
 	main(sys.argv);
