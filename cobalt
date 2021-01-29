@@ -259,11 +259,7 @@ def Cobalt_build(project):
 
 	if project["type"] in ["application", "staticlib", "sharedlib"]:
 		Cobalt_generate(project);
-
-		owd = os.getcwd();
-		os.chdir(project["build_dir"]);
-		subprocess.call(["ninja"]);
-		os.chdir(owd);
+		subprocess.call(["ninja", "-f", def_build_file], cwd = project["build_dir"]);
 	
 	copy_runtime_data(project);
 
