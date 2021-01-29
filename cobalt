@@ -8,88 +8,21 @@ import os, sys, subprocess, shutil;
 import json, argparse;
 
 #################################
-# Utilities
+# Config
 #################################
 
 def_build_dir = "builddir";
+def_build_file = "build.ninja";
 def_proj_file_name = "Cobalt.json";
 cobalt_version = "0.0.3";
 ninja_required_version = "1.5.1";
-
-#################################
-# Compiler command
-#################################
-
-def make_prefix(dir_list, prefix):
-	if dir_list == None: 
-		return [];
-	else:
-		to_ret = [];
-		to_ret.extend([prefix + i for i in dir_list]);
-		return to_ret;
-
-def make_include_dir(include_dir_list):
-	return make_prefix(include_dir_list, "-I");
-
-def make_lib_dir(lib_dir_list):
-	return make_prefix(lib_dir_list, "-L");
-
-def make_libs(libs_list):
-	return make_prefix(libs_list, "-l");
-
-def Ninja_write_file(project, file_name):
-	with open(file_name, "w") as file:
-		file.writelines([
-			"# Cobalt Build System {}\n".format(cobalt_version),
-			"# This file is generated automatically, do not edit!\n\n"
-		]);
-
-		file.write("ninja_required_version = {}\n\n".format(ninja_required_version));
-		
-		file.writelines([
-			"rule c_Compile\n",
-			" command = cc -MD -MQ $out -MF '$DEPFILE' $c_FLAGS $INCLUDE_DIR -o $out -c $in\n",
-			" deps = gcc\n",
-			" depfile = $DEPFILE\n",
-			" description = Compiling file$: $FILENAME\n\n"
-		]);
-
-		file.writelines([
-			"rule c_Link\n",
-			" command = cc -o $out $in $LIB_DIR $LIBS\n",
-			" description = Linking project$: $LINKNAME\n\n"
-		]);
-
-		include_dir = " ".join(make_include_dir(project.get("include_dir")));
-		lib_dir = " ".join(make_lib_dir(project.get("lib_dir")));
-		libs = " ".join(make_libs(project.get("libs")));
-
-		for i in range(len(project["src"])):
-			source_name = project["source_list"][i];
-			object_name = project["object_list"][i];
-
-			file.writelines([
-				"build {}: c_Compile {}\n".format(object_name, source_name),
-				" DEPFILE = {}\n".format(object_name + ".d"),
-				" INCLUDE_DIR = {}\n".format(include_dir),
-				" FILENAME = {}\n\n".format(project["src"][i])
-			]);
-		
-		file.writelines([
-			"build {}: c_Link ".format(os.path.relpath(project["target_name"], project["build_dir"])),
-			" ".join(project["object_list"]), "\n",
-			" LIB_DIR = {}\n".format(lib_dir),
-			" LIBS = {}\n".format(libs),
-			" LINKNAME = {}\n\n".format(project["id"])
-		]);
-
-		file.write("\n\n");
 
 #################################
 # Project
 #################################
 
 properties = {
+	"src": "",
 	"include_dir": "",
 	"lib_dir": "",
 	"libs": "",
@@ -114,110 +47,15 @@ def load_project(path):
 		project = json.load(file);
 
 	project["path"] = path;
+	project["build_dir"] = os.path.join(project["path"], def_build_dir);
+	project["bin_dir"] = os.path.join(project["build_dir"], "bin");
+	project["object_dir"] = os.path.join(project["build_dir"], "object");
+	project["target_name"] = os.path.join(project["bin_dir"], project["id"]);
 
 	for prop in properties:
 		check_for_prop(project, prop, properties.get(prop));
 
 	return project;
-
-def make_dir(path):
-	if not os.path.exists(path): 
-		os.mkdir(path);
-
-def active_project(project):
-	project["build_dir"] = os.path.join(project["path"], def_build_dir);
-	project["bin_dir"] = os.path.join(project["build_dir"], "bin");
-	project["object_dir"] = os.path.join(project["build_dir"], "object");
-
-	project["target_name"] = os.path.join(project["bin_dir"], project["id"]);
-
-	make_dir(project["build_dir"]);
-	make_dir(project["bin_dir"]);
-	make_dir(project["object_dir"]);
-
-#################################
-# Run project
-#################################
-
-def Cobalt_run(project):
-	if project["type"] == "application":
-		file_name = os.path.join(project["bin_dir"], project["id"]);
-		if not os.path.isfile(file_name):
-			print("Project is not compiled.");
-			return False;
-
-		print("Launching application: {}".format(project["id"]));
-		subprocess.run([file_name]);
-	else:
-		print("Nothing to run!");
-
-	return True;
-
-#################################
-# Building project
-#################################
-
-def process_project(project):
-	project["source_list"] = [];
-	project["object_list"] = [];
-
-	for source_file in project["src"]:
-		file_name = os.path.join(project["path"], source_file);
-		object_name = os.path.join("object", source_file.replace("/", "--") + ".o");
-
-		if not os.path.isfile(file_name):
-			print("File {} not found.\nAborting!".format(source_file));
-			return False;
-
-		project["source_list"].append(os.path.relpath(file_name, project["build_dir"]));
-		project["object_list"].append(object_name);
-
-def copy_runtime_data(project):
-	for i in project["runtime_data"]:
-		dest = os.path.join(project["bin_dir"], os.path.basename(i));
-
-		if dest != project["target_name"]:
-			shutil.copyfile(i, dest);
-
-def load_depends(project):
-	for depend in project["depends"]:
-		depproj = load_project(os.path.join(project["path"], depend));
-		active_project(depproj);
-		Cobalt_build(depproj);
-		
-		get_data = lambda prop: [os.path.relpath(os.path.join(depproj.get("path"), i), project.get("path")) for i in depproj.get(prop)];
-
-		if depproj["type"] == "application":
-			project["runtime_data"].extend(get_data("target_name"));
-		elif depproj["type"] == "module":
-			project["include_dir"].extend(get_data("include_dir"));
-			project["lib_dir"].extend(get_data("lib_dir"));
-			project["libs"].extend(depproj["libs"]);
-
-		project["runtime_data"].extend(get_data("runtime_data"));
-
-def Cobalt_build(project):
-	load_depends(project);
-
-	if project["type"] in ["application", "staticlib", "sharedlib"]:
-		process_project(project);
-		Ninja_write_file(project, os.path.join(project["build_dir"], "build.ninja"));
-
-		owd = os.getcwd();
-		os.chdir(project["build_dir"]);
-		subprocess.call(["ninja"]);
-		os.chdir(owd);
-	
-	copy_runtime_data(project);
-
-#################################
-# Deleting build files
-#################################
-
-def Cobalt_clear(path):
-	build_dir = os.path.join(path, def_build_dir);
-	if not os.path.exists(build_dir): return;
-	shutil.rmtree(build_dir);
 
 #################################
 # Project creation
@@ -273,6 +111,181 @@ def Cobalt_create(name, type):
 	print("New project created in current working directory: {}".format(name));
 
 #################################
+# Deleting build files
+#################################
+
+def Cobalt_clear(path):
+	build_dir = os.path.join(path, def_build_dir);
+	if not os.path.exists(build_dir): return;
+	shutil.rmtree(build_dir);
+
+#################################
+# Generate project
+#################################
+
+def make_prefix(dir_list, prefix):
+	if dir_list == None: 
+		return [];
+	else:
+		to_ret = [];
+		to_ret.extend([prefix + i for i in dir_list]);
+		return to_ret;
+
+def make_include_dir(include_dir_list):
+	return make_prefix(include_dir_list, "-I");
+
+def make_lib_dir(lib_dir_list):
+	return make_prefix(lib_dir_list, "-L");
+
+def make_libs(libs_list):
+	return make_prefix(libs_list, "-l");
+
+def wrap_cmd(cmd):
+	if os.name == "nt":
+		return "cmd /c \"" + cmd + "\"";
+	return cmd;
+
+def Ninja_write_file(project):
+	file = [];
+	
+	file.extend([
+		"# Cobalt Build System {}\n".format(cobalt_version),
+		"# Repo: https://github.com/iddev5/cobalt\n",
+		"# This file is generated automatically, do not edit!\n\n"
+	]);
+
+	file.append("ninja_required_version = {}\n\n".format(ninja_required_version));
+		
+	file.extend([
+		"rule c_Compile\n",
+		" command = cc -MD -MQ $out -MF '$DEPFILE' $c_FLAGS $INCLUDE_DIR -o $out -c $in\n",
+		" deps = gcc\n",
+		" depfile = $DEPFILE\n",
+		" description = Compiling file$: $FILENAME\n\n"
+	]);
+
+	file.extend([
+		"rule c_Link\n",
+		" command = cc -o $out $in $LIB_DIR $LIBS\n",
+		" description = Linking project$: $LINKNAME\n\n"
+	]);
+
+	include_dir = " ".join(make_include_dir(project.get("include_dir")));
+	lib_dir = " ".join(make_lib_dir(project.get("lib_dir")));
+	libs = " ".join(make_libs(project.get("libs")));
+
+	for i in range(len(project["src"])):
+		source_name = project["source_list"][i];
+		object_name = project["object_list"][i];
+
+		file.extend([
+			"build {}: c_Compile {}\n".format(object_name, source_name),
+			" DEPFILE = {}\n".format(object_name + ".d"),
+			" INCLUDE_DIR = {}\n".format(include_dir),
+			" FILENAME = {}\n\n".format(project["src"][i])
+		]);
+		
+	file.extend([
+		"build {}: c_Link ".format(os.path.relpath(project["target_name"], project["build_dir"])),
+		" ".join(project["object_list"]), "\n",
+		" LIB_DIR = {}\n".format(lib_dir),
+		" LIBS = {}\n".format(libs),
+		" LINKNAME = {}\n\n".format(project["id"])
+	]);
+
+	file.append("\n\n");
+
+	return file;
+
+def process_project(project):
+	project["source_list"] = [];
+	project["object_list"] = [];
+
+	for source_file in project["src"]:
+		file_name = os.path.join(project["path"], source_file);
+		object_name = os.path.join("object", source_file.replace("/", "--") + ".o");
+
+		if not os.path.isfile(file_name):
+			print("File {} not found.\nAborting!".format(source_file));
+			return False;
+
+		project["source_list"].append(os.path.relpath(file_name, project["build_dir"]));
+		project["object_list"].append(object_name);
+
+def copy_runtime_data(project):
+	for i in project["runtime_data"]:
+		dest = os.path.join(project["bin_dir"], os.path.basename(i));
+
+		if dest != project["target_name"]:
+			shutil.copyfile(i, dest);
+
+def load_depends(project):
+	for depend in project["depends"]:
+		depproj = load_project(os.path.join(project["path"], depend));
+		Cobalt_build(depproj);
+		
+		get_data = lambda prop: [os.path.relpath(os.path.join(depproj.get("path"), i), project.get("path")) for i in depproj.get(prop)];
+
+		if depproj["type"] == "application":
+			project["runtime_data"].extend(get_data("target_name"));
+		elif depproj["type"] == "module":
+			project["include_dir"].extend(get_data("include_dir"));
+			project["lib_dir"].extend(get_data("lib_dir"));
+			project["libs"].extend(depproj["libs"]);
+
+		project["runtime_data"].extend(get_data("runtime_data"));
+
+def Cobalt_generate(project):
+	load_depends(project);
+
+	process_project(project);
+	file = Ninja_write_file(project);
+
+	with open(os.path.join(project["build_dir"], def_build_file), "w") as f:
+		f.writelines(file);
+
+#################################
+# Building project
+#################################
+
+def make_dir(path):
+	if not os.path.exists(path):
+		os.mkdir(path);
+
+def Cobalt_build(project):
+	make_dir(project["build_dir"]);
+	make_dir(project["bin_dir"]);
+	make_dir(project["object_dir"]);
+
+	if project["type"] in ["application", "staticlib", "sharedlib"]:
+		Cobalt_generate(project);
+
+		owd = os.getcwd();
+		os.chdir(project["build_dir"]);
+		subprocess.call(["ninja"]);
+		os.chdir(owd);
+	
+	copy_runtime_data(project);
+
+#################################
+# Run project
+#################################
+
+def Cobalt_run(project):
+	if project["type"] == "application":
+		file_name = os.path.join(project["bin_dir"], project["id"]);
+		if not os.path.isfile(file_name):
+			print("Project is not compiled.");
+			return False;
+
+		print("Launching application: {}".format(project["id"]));
+		subprocess.run([file_name]);
+	else:
+		print("Nothing to run!");
+
+	return True;
+
+#################################
 # Main
 #################################
 
@@ -305,8 +318,17 @@ def main(argv):
 
 	elif args.command == "clear":
 		proj_path = os.path.dirname(os.path.abspath(def_proj_file_name));
-
 		Cobalt_clear(proj_path);
+
+	elif args.command == "generate":
+		proj_path = os.path.dirname(os.path.abspath(def_proj_file_name));
+
+		if not os.path.isfile(os.path.join(proj_path, def_proj_file_name)):
+			print("The current directory has no Cobalt project in it!\nAborting.");
+			return 0;
+
+		project = load_project(proj_path);
+		Cobalt_generate(project);
 
 	elif args.command == "build":
 		proj_path = os.path.dirname(os.path.abspath(def_proj_file_name));
@@ -316,8 +338,6 @@ def main(argv):
 			return 0;
 
 		project = load_project(proj_path);
-		active_project(project);
-
 		Cobalt_build(project);
 
 	elif args.command == "rebuild":
@@ -330,8 +350,6 @@ def main(argv):
 		Cobalt_clear(proj_path);
 
 		project = load_project(proj_path);
-		active_project(project);
-
 		Cobalt_build(project);
 	
 	elif args.command == "run":
@@ -342,7 +360,6 @@ def main(argv):
 			return 0;
 		
 		project = load_project(proj_path);
-		active_project(project);
 		if not Cobalt_run(project):
 			Cobalt_build(project);
 			Cobalt_run(project);
