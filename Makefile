@@ -1,13 +1,15 @@
+.PHONY: default
+default: help ;
+
 install:
-	cp -f cobalt /usr/bin/cobalt
-	chmod +x /usr/bin/cobalt
+	cp -f cobalt /usr/local/bin/cobalt
+	chmod +x /usr/local/bin/cobalt
 
 uninstall:
-	rm -f /usr/bin/cobalt
+	rm -f /usr/local/bin/cobalt
 
 help:
-	@echo Cobalt Build System.
-	@echo
-	@echo list of commands:
-	@echo    install
-	@echo    uninstall
+	@echo "Cobalt Build System.\n"
+	@echo "list of commands:"
+	@echo "\tinstall"
+	@echo "\tuninstall"
