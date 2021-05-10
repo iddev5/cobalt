@@ -74,7 +74,9 @@ def is_valid_project_type(type):
 
 def get_files(path, ext, recurse):
     ret = [];
-    for files in os.listdir(path):
+
+    fold = path if path != "" else os.getcwd();
+    for files in os.listdir(fold):
         name = os.path.join(path, files);
         if os.path.isfile(name):
             if name.endswith(ext): ret.append(name);
@@ -96,12 +98,12 @@ def Cobalt_create(name, type):
         project["type"] = "application";
 
     project["src"]  = get_files("src", ".c", True) if os.path.exists("src") else [];
-    project["src"] += get_files(os.getcwd(), ".c", False);
+    project["src"] += get_files("", ".c", False);
 
     cpp_ext = [".cpp", ".cxx", ".cc"]
     for e in cpp_ext:
         cpp_files = get_files("src", e, True) if os.path.exists("src") else [];
-        cpp_files += get_files(os.getcwd(), e, False);
+        cpp_files += get_files("", e, False);
 
     print(cpp_files);
 
