@@ -22,6 +22,7 @@ ninja_required_version = "1.5.1";
 #################################
 
 properties = {
+    "lang": "string",
     "src": "",
     "include_dir": "",
     "lib_dir": "",
@@ -161,37 +162,72 @@ def Ninja_write_file(project):
         " command = cc -MD -MQ $out -MF '$DEPFILE' $c_FLAGS $INCLUDE_DIR -o $out -c $in\n",
         " deps = gcc\n",
         " depfile = $DEPFILE\n",
-        " description = Compiling file$: $FILENAME\n\n"
+        " description = Compiling C source$: $FILENAME\n\n"
+    ]);
+
+    file.extend([
+        "rule cpp_Compile\n",
+        " command = c++ -MD -MQ $out -MF '$DEPFILE' $c_FLAGS $INCLUDE_DIR -o $out -c $in\n",
+        " deps = gcc\n",
+        " depfile = $DEPFILE\n",
+        " description = Compiling C++ source$: $FILENAME\n\n"
     ]);
 
     file.extend([
         "rule c_Link\n",
         " command = cc -o $out $in $LIB_DIR $LIBS\n",
-        " description = Linking project$: $LINKNAME\n\n"
+        " description = Linking C project$: $LINKNAME\n\n"
     ]);
-
+    
+    file.extend([
+        "rule cpp_Link\n",
+        " command = c++ -o $out $in $LIB_DIR $LIBS\n",
+        " description = Linking C++ project$: $LINKNAME\n\n"
+    ]);
+    
     include_dir = " ".join(make_include_dir(project.get("include_dir")));
     lib_dir = " ".join(make_lib_dir(project.get("lib_dir")));
     libs = " ".join(make_libs(project.get("libs")));
+
+    cpp_proj = project.get("lang") == "cpp";
 
     for i in range(len(project["src"])):
         source_name = project["source_list"][i];
         object_name = project["object_list"][i];
 
+        if cpp_proj:
+            file.extend([
+                "build {}: cpp_Compile {}\n".format(object_name, source_name),
+                " DEPFILE = {}\n".format(object_name + ".d"),
+                " INCLUDE_DIR = {}\n".format(include_dir),
+                " FILENAME = {}\n\n".format(project["src"][i])
+            ]);
+        else:
+            file.extend([
+                "build {}: c_Compile {}\n".format(object_name, source_name),
+                " DEPFILE = {}\n".format(object_name + ".d"),
+                " INCLUDE_DIR = {}\n".format(include_dir),
+                " FILENAME = {}\n\n".format(project["src"][i])
+            ]);
+
+    cpp_link = "is_cpp_link" in project and project.get("is_cpp_link") == true;
+    
+    if cpp_link or cpp_proj:
         file.extend([
-            "build {}: c_Compile {}\n".format(object_name, source_name),
-            " DEPFILE = {}\n".format(object_name + ".d"),
-            " INCLUDE_DIR = {}\n".format(include_dir),
-            " FILENAME = {}\n\n".format(project["src"][i])
+            "build {}: cpp_Link ".format(os.path.relpath(project["target_name"], project["build_dir"])),
+            " ".join(project["object_list"]), "\n",
+            " LIB_DIR = {}\n".format(lib_dir),
+            " LIBS = {}\n".format(libs),
+            " LINKNAME = {}\n\n".format(project["id"])
         ]);
-        
-    file.extend([
-        "build {}: c_Link ".format(os.path.relpath(project["target_name"], project["build_dir"])),
-        " ".join(project["object_list"]), "\n",
-        " LIB_DIR = {}\n".format(lib_dir),
-        " LIBS = {}\n".format(libs),
-        " LINKNAME = {}\n\n".format(project["id"])
-    ]);
+    else:
+        file.extend([
+            "build {}: c_Link ".format(os.path.relpath(project["target_name"], project["build_dir"])),
+            " ".join(project["object_list"]), "\n",
+            " LIB_DIR = {}\n".format(lib_dir),
+            " LIBS = {}\n".format(libs),
+            " LINKNAME = {}\n\n".format(project["id"])
+        ]);
 
     file.append("\n\n");
 
@@ -232,6 +268,7 @@ def load_depends(project):
             project["include_dir"].extend(get_data("include_dir"));
             project["lib_dir"].extend(get_data("lib_dir"));
             project["libs"].extend(depproj["libs"]);
+            project["is_cpp_link"] = depproj["lang"] == "cpp";
 
         project["runtime_data"].extend(get_data("runtime_data"));
 
