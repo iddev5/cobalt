@@ -100,15 +100,13 @@ def Cobalt_create(name, type):
     project["src"]  = get_files("src", ".c", True) if os.path.exists("src") else [];
     project["src"] += get_files("", ".c", False);
 
+    cpp_files = [];
     cpp_ext = [".cpp", ".cxx", ".cc"]
     for e in cpp_ext:
-        cpp_files = get_files("src", e, True) if os.path.exists("src") else [];
+        cpp_files += get_files("src", e, True) if os.path.exists("src") else [];
         cpp_files += get_files("", e, False);
 
-    print(cpp_files);
-
-    print(project["src"]);
-    if not cpp_files == []:
+    if cpp_files != []:
         project["src"] += cpp_files;
         project["lang"] = "cpp";
 
