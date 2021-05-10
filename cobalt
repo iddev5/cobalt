@@ -276,9 +276,10 @@ def load_depends(project):
         Cobalt_build(depproj);
         
         get_data = lambda prop: [os.path.relpath(os.path.join(depproj.get("path"), i), project.get("path")) for i in depproj.get(prop)];
+        get_data_s = lambda prop: [os.path.relpath(os.path.join(depproj.get("path"), depproj.get(prop)), project.get("path")) if prop in depproj else []];
 
         if depproj["type"] == "application":
-            project["runtime_data"].extend(get_data("target_name"));
+            project["runtime_data"].extend(get_data_s("target_name"));
         elif depproj["type"] == "module":
             project["include_dir"].extend(get_data("include_dir"));
             project["lib_dir"].extend(get_data("lib_dir"));
