@@ -267,7 +267,8 @@ def copy_runtime_data(project):
         dest = os.path.join(project["bin_dir"], os.path.basename(i));
 
         if dest != project["target_name"]:
-            shutil.copyfile(i, dest);
+            if os.path.isfile(i):
+                shutil.copyfile(i, dest);
 
 def load_depends(project):
     for depend in project["depends"]:
