@@ -36,6 +36,9 @@ def check_for_prop(project, prop, type):
         if type == "string": project[prop] = "";
         else: project[prop] = [];
 
+def is_cpp(lang):
+    return lang in ["cpp", "c++", "cxx"];
+
 def load_project(path):
     project = {};
     project_file = os.path.join(path, def_proj_file_name);
@@ -92,9 +95,20 @@ def Cobalt_create(name, type):
         print("Unrecognized project type \"{}\", changing to default (application).".format(type));
         project["type"] = "application";
 
-    if os.path.exists("src"):
-        project["src"]  = get_files("src", ".c", True);
-        project["src"] += get_files(os.getcwd(), ".c", False);
+    project["src"]  = get_files("src", ".c", True) if os.path.exists("src") else [];
+    project["src"] += get_files(os.getcwd(), ".c", False);
+
+    cpp_ext = [".cpp", ".cxx", ".cc"]
+    for e in cpp_ext:
+        cpp_files = get_files("src", e, True) if os.path.exists("src") else [];
+        cpp_files += get_files(os.getcwd(), e, False);
+
+    print(cpp_files);
+
+    print(project["src"]);
+    if not cpp_files == []:
+        project["src"] += cpp_files;
+        project["lang"] = "cpp";
 
     if os.path.exists("include"):
         project["include_dir"] = ["include"];
@@ -189,7 +203,7 @@ def Ninja_write_file(project):
     lib_dir = " ".join(make_lib_dir(project.get("lib_dir")));
     libs = " ".join(make_libs(project.get("libs")));
 
-    cpp_proj = project.get("lang") == "cpp";
+    cpp_proj = is_cpp(project.get("lang"));
 
     for i in range(len(project["src"])):
         source_name = project["source_list"][i];
@@ -268,7 +282,7 @@ def load_depends(project):
             project["include_dir"].extend(get_data("include_dir"));
             project["lib_dir"].extend(get_data("lib_dir"));
             project["libs"].extend(depproj["libs"]);
-            project["is_cpp_link"] = depproj["lang"] == "cpp";
+            project["is_cpp_link"] = is_cpp(depproj["lang"]);
 
         project["runtime_data"].extend(get_data("runtime_data"));
 
