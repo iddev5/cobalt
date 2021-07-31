@@ -1,8 +1,18 @@
 #!/usr/bin/python3
 
-# Cobalt Build System - 0.0.2
+# Cobalt Build System - 0.0.4
 # Copyright (C) 2020, 2021 Ayush Bardhan Tripathy.
 # This project is licensed under MIT License (See LICENSE.md).
+
+# Version info (change-log)
+#
+# 0.0.4 - Support for C++ projects. New command: generate. Run command can now pass on args. Bug fixes. Removed
+#         the installation Makefile
+# 0.0.3 - Improved dependency loading and project defaults. Defaulted build path to 'builddir', using relative paths.
+#         New commands: clean, rebuild
+# 0.0.2 - Switched to generating Ninja files instead of building itself. Bug fixes. Added a Makefile for
+#         system wide installation
+# 0.0.1 - Initial public release
 
 import os, sys, subprocess, shutil;
 import json, argparse;
@@ -14,7 +24,7 @@ import json, argparse;
 def_build_dir = "builddir";
 def_build_file = "build.ninja";
 def_proj_file_name = "Cobalt.json";
-cobalt_version = "0.0.3";
+cobalt_version = "0.0.4";
 ninja_required_version = "1.5.1";
 
 #################################
