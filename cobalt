@@ -338,7 +338,7 @@ def Cobalt_run(project, args):
             return False;
 
         print("Launching application: {}".format(project["id"]));
-        cmd = list(file_name) + args;
+        cmd = [file_name] + args;
         subprocess.call(cmd);
     else:
         print("Nothing to run!");
