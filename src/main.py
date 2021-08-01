@@ -11,7 +11,7 @@ import json, argparse;
 
 def_build_dir = "builddir";
 def_build_file = "build.ninja";
-def_proj_file_name = "Cobalt.json";
+def_proj_file_name = "cobalt.json";
 cobalt_version = "0.0.4";
 ninja_required_version = "1.5.1";
 
@@ -26,7 +26,8 @@ properties = {
     "lib_dir": "",
     "libs": "",
     "runtime_data": "",
-    "depends": ""
+    "depends": "",
+    "globalbuilddir": "string",
 };
 
 def check_for_prop(project, prop, type):
@@ -48,8 +49,10 @@ def load_project(path):
     with open(project_file) as file:
         project = json.load(file);
 
+    build_dir = project["globalbuilddir"] if "globalbuilddir" in project else def_build_dir;
+
     project["path"] = path;
-    project["build_dir"] = os.path.join(project["path"], def_build_dir);
+    project["build_dir"] = os.path.join(project["path"], build_dir);
     project["bin_dir"] = os.path.join(project["build_dir"], "bin");
     project["object_dir"] = os.path.join(project["build_dir"], "object");
     project["target_name"] = os.path.join(project["bin_dir"], project["id"]);
