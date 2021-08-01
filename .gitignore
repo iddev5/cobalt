@@ -2,3 +2,4 @@
 *.swo
 *.txt
 cobalt.*
+*/__pycache__/*
